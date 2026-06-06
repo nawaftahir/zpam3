@@ -659,7 +659,7 @@ spawnPlayer()
 			spawnpointname = "mp_ctf_spawn_allied";
 		else
 			spawnpointname = "mp_ctf_spawn_axis";
-		spawnpoints = getentarray(spawnpointname, "classname");
+		spawnpoints = maps\mp\gametypes\_customspawns::getSpawnpoints(spawnpointname);
 		spawnpoint = maps\mp\gametypes\_spawnlogic::getSpawnpoint_NearTeam(spawnpoints);
 
 		if(isDefined(spawnpoint))

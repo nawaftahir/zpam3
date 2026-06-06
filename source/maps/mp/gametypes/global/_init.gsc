@@ -116,4 +116,5 @@ InitModules()
 
 	thread maps\mp\gametypes\_objective::init(); // depends on readyup, timeout
 
+	thread maps\mp\gametypes\_customspawns::init(); // JSON proof-of-concept (custom spawns)
 }
