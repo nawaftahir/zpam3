@@ -19,6 +19,8 @@ Init()
 	registerCvarEx("I", "scr_bots_removeAll", "BOOL", 0);		// remove all bots from server
 	registerCvarEx("I", "scr_bots_freeze", "BOOL", 1); 		// freeze bots movement
 	registerCvarEx("I", "scr_bots_spam", "FLOAT", 0); 		// periodically connect and disconnect a bot - the value set time cycle in seconds
+	registerCvarEx("I", "scr_bots_ai", "BOOL", 0); 			// master AI switch - when 1 bots run brain (perception+combat); set scr_bots_freeze 0 first
+	registerCvarEx("I", "debug_bots", "BOOL", 0); 			// log brain decisions to chat
 }
 
 
@@ -60,6 +62,10 @@ onCvarChanged(cvar, value, isRegisterTime)
 		case "scr_bots_freeze": 		level.bots_freeze = value;		return true;
 
 		case "scr_bots_spam": 			thread spam_bot(value);		return true;
+
+		case "scr_bots_ai": 			level.bots_ai = value;			return true;
+
+		case "debug_bots": 			level.debug_bots = value;		return true;
 
 	}
 	return false;
@@ -339,7 +345,12 @@ bot_think()
 			wait level.fps_multiplier * 0.2;
 		}
 
-
+		// Start brain once when AI is enabled (toggle requires bot re-add)
+		if (isDefined(level.bots_ai) && level.bots_ai && !isDefined(self.bot_brain_started))
+		{
+			self.bot_brain_started = true;
+			self thread scripts\bots\_bot_brain::run();
+		}
 
 		wait level.fps_multiplier * 0.2;
 	}
