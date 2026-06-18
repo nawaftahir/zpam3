@@ -52,16 +52,17 @@ run()
 			continue;
 		}
 
-		// ---- Idle: chase last-known -> waypoint -> wander -----------------
+		// ---- Idle: chase / waypoint / wander, path-followed when possible -
 		if(!has_enemy)
 		{
 			goal = pick_idle_goal();
+			step_target = resolve_path_target(goal);
 
-			if(gettime() > self.bot_wander_until || isDefined(goal))
+			if(gettime() > self.bot_wander_until || isDefined(step_target))
 			{
-				if(isDefined(goal))
+				if(isDefined(step_target))
 				{
-					face = vectortoangles(goal - self.origin);
+					face = vectortoangles(step_target - self.origin);
 					self setPlayerAngles((0, face[1], 0));
 				}
 				else
@@ -72,7 +73,6 @@ run()
 				self.bot_wander_until = gettime() + wander_repick_ms;
 			}
 
-			// Trace forward — if blocked, repick next tick
 			fwd = anglestoforward(self getPlayerAngles());
 			ahead = (self.origin[0] + fwd[0] * wander_trace_len,
 			         self.origin[1] + fwd[1] * wander_trace_len,
@@ -92,7 +92,13 @@ run()
 		}
 
 		// ---- Engaging: strafe + close to engage range ----------------------
+		// Re-fetch — perception may have cleared bot_enemy during the wait.
 		enemy = self.bot_enemy;
+		if(!isDefined(enemy) || !isAlive(enemy))
+		{
+			self setWalkValues(0, 0);
+			continue;
+		}
 		d2 = distanceSquared(self.origin, enemy.origin);
 		close_enough = (d2 < engage_range * engage_range);
 
@@ -123,6 +129,50 @@ run()
 			update_stuck();
 		}
 	}
+}
+
+// Translate the final goal into the immediate step target, using A* if a
+// path can be planned. Returns:
+//   - the next path-node origin if a path exists and we're not yet on it
+//   - the goal itself if path is empty / unavailable (fall back to straight line)
+//   - undefined if no goal at all (caller picks random yaw)
+resolve_path_target(goal)
+{
+	if(!isDefined(goal))
+		return undefined;
+
+	advance_eps_sq = 128 * 128;
+	replan_ms      = 1000;
+	goal_drift_sq  = 150 * 150;
+
+	stale = false;
+	if(!isDefined(self.bot_path))
+		stale = true;
+	else if(!isDefined(self.bot_path_goal))
+		stale = true;
+	else if(distanceSquared(goal, self.bot_path_goal) > goal_drift_sq)
+		stale = true;
+
+	if(stale && (!isDefined(self.bot_path_next_ms) || gettime() >= self.bot_path_next_ms))
+	{
+		self.bot_path         = scripts\bots\_bot_graph::plan(self.origin, goal);
+		self.bot_path_idx     = 0;
+		self.bot_path_goal    = goal;
+		self.bot_path_next_ms = gettime() + replan_ms;
+	}
+
+	if(!isDefined(self.bot_path) || self.bot_path.size == 0)
+		return goal;
+
+	// Advance through reached nodes
+	while(self.bot_path_idx < self.bot_path.size &&
+	      distanceSquared(self.origin, self.bot_path[self.bot_path_idx]) < advance_eps_sq)
+		self.bot_path_idx += 1;
+
+	if(self.bot_path_idx >= self.bot_path.size)
+		return goal;
+
+	return self.bot_path[self.bot_path_idx];
 }
 
 // Decide where to walk while idle.
@@ -171,6 +221,7 @@ update_stuck()
 	{
 		self thread jump_pulse();
 		self.bot_last_origin_time = gettime();
+		self scripts\bots\_bot_log::log_event("stuck", "3", "jumping");
 	}
 }
 

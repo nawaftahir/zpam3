@@ -112,36 +112,13 @@ run()
 		}
 
 		// Color logging on state changes (chat + server log)
-		if(isDefined(level.debug_bots) && level.debug_bots)
-		{
-			if(!isDefined(self.bot_log_next_ms))
-				self.bot_log_next_ms = 0;
-			can_log = (gettime() >= self.bot_log_next_ms);
-
-			tier = "T?";
-			if(isDefined(self.bot_skill_tier))
-				tier = "T" + self.bot_skill_tier;
-
-			prev = self.bot_enemy;
-			changed = false;
-			if(!isDefined(prev) && isDefined(committed))
-			{
-				if(can_log) iprintln("^2[bots] ^7" + self.name + " ^5" + tier + " ^2ACQUIRE ^7" + committed.name);
-				changed = true;
-			}
-			else if(isDefined(prev) && !isDefined(committed))
-			{
-				if(can_log) iprintln("^1[bots] ^7" + self.name + " ^5" + tier + " ^1LOST ^7" + prev.name);
-				changed = true;
-			}
-			else if(isDefined(prev) && isDefined(committed) && prev != committed)
-			{
-				if(can_log) iprintln("^3[bots] ^7" + self.name + " ^5" + tier + " ^3SWITCH ^7" + prev.name + " ^3-> ^7" + committed.name);
-				changed = true;
-			}
-			if(changed && can_log)
-				self.bot_log_next_ms = gettime() + 1000;
-		}
+		prev = self.bot_enemy;
+		if(!isDefined(prev) && isDefined(committed))
+			self scripts\bots\_bot_log::log_event("saw", "2", committed.name);
+		else if(isDefined(prev) && !isDefined(committed))
+			self scripts\bots\_bot_log::log_event("lost", "1", prev.name);
+		else if(isDefined(prev) && isDefined(committed) && prev != committed)
+			self scripts\bots\_bot_log::log_event("switch", "3", prev.name + " -> " + committed.name);
 
 		self.bot_enemy = committed;
 		if(isDefined(committed))

@@ -13,24 +13,19 @@
 
 init()
 {
-	level.bot_dbg_label = [];
-	level.bot_dbg_label[0] = "T? Mixed";
-	level.bot_dbg_label[1] = "T1 Recruit";
-	level.bot_dbg_label[2] = "T2 Regular";
-	level.bot_dbg_label[3] = "T3 Veteran";
-	level.bot_dbg_label[4] = "T4 Elite";
+	// precacheString must run while level.initializing is true (Init time).
+	precacheString(&"T? Mixed");
+	precacheString(&"T1 Recruit");
+	precacheString(&"T2 Regular");
+	precacheString(&"T3 Veteran");
+	precacheString(&"T4 Elite");
 
-	// Anchor elems hold the strings alive so setText is legal post-init.
-	level.bot_dbg_anchor = [];
-	for(i = 0; i < 5; i++)
-	{
-		a = newHudElem2();
-		a setText(level.bot_dbg_label[i]);
-		a.alpha = 0;
-		a.x = 0;
-		a.y = 0;
-		level.bot_dbg_anchor[i] = a;
-	}
+	level.bot_dbg_label = [];
+	level.bot_dbg_label[0] = &"T? Mixed";
+	level.bot_dbg_label[1] = &"T1 Recruit";
+	level.bot_dbg_label[2] = &"T2 Regular";
+	level.bot_dbg_label[3] = &"T3 Veteran";
+	level.bot_dbg_label[4] = &"T4 Elite";
 
 	level thread run();
 }

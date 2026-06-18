@@ -39,13 +39,15 @@ run()
 			continue;
 		}
 
-		if(!has_enemy)
+		// Re-check after the wait — perception may have cleared bot_enemy
+		// while we were asleep, so has_enemy from before the wait is stale.
+		enemy = self.bot_enemy;
+		if(!isDefined(enemy) || !isAlive(enemy))
 		{
 			self fireWeapon(0);
 			continue;
 		}
 
-		enemy = self.bot_enemy;
 		desired = vectortoangles(enemy getViewOrigin() - self getViewOrigin());
 
 		// Aim noise: random jitter +/- noise_deg/2 on pitch and yaw.
@@ -71,6 +73,7 @@ run()
 		{
 			self thread fire_pulse();
 			self.bot_fire_time = gettime();
+			self scripts\bots\_bot_log::log_event("fired", "6", enemy.name);
 		}
 	}
 }
