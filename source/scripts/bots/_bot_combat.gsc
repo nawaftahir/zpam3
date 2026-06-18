@@ -5,20 +5,29 @@
 // and the cooldown has elapsed. fireWeapon(1/0) is a button-hold toggle —
 // semi-auto/bolt fire on the 0->1 edge so each shot must be pulsed.
 // v0: no skill ladder, no aim noise.
+// Per-bot knobs (copied onto self by _bot_brain at init):
+//   self.bot_aim_blend, self.bot_aim_noise_deg,
+//   self.bot_fire_cooldown_ms, self.bot_fire_angle_deg
 run()
 {
 	self endon("disconnect");
 
-	fire_cooldown_ms = 250;     // ms between trigger pulses (gettime() units)
-	aim_blend        = 0.35;
-	fire_angle_deg   = 6;
+	if(isDefined(self.bot_phase))
+		wait level.fps_multiplier * self.bot_phase;
 
 	for(;;)
 	{
-		wait level.fps_multiplier * 0.05;
+		// 20Hz when shooting, 5Hz when idle/dead/disabled. Aim math +
+		// getPlayerAngles is the hottest per-tick cost — only pay it when
+		// there's actually a target.
+		has_enemy = (isDefined(self.bot_enemy) && isAlive(self.bot_enemy));
+		ai_on    = (isDefined(level.bots_ai) && level.bots_ai);
+		if(ai_on && isAlive(self) && has_enemy)
+			wait level.fps_multiplier * 0.05;
+		else
+			wait level.fps_multiplier * 0.2;
 
-		// Master gate — toggle scr_bots_ai 0 actually stops firing now
-		if(!isDefined(level.bots_ai) || !level.bots_ai)
+		if(!ai_on)
 		{
 			self fireWeapon(0);
 			continue;
@@ -30,7 +39,7 @@ run()
 			continue;
 		}
 
-		if(!isDefined(self.bot_enemy) || !isAlive(self.bot_enemy))
+		if(!has_enemy)
 		{
 			self fireWeapon(0);
 			continue;
@@ -38,15 +47,25 @@ run()
 
 		enemy = self.bot_enemy;
 		desired = vectortoangles(enemy getViewOrigin() - self getViewOrigin());
-		current = self getPlayerAngles();
 
-		self setPlayerAngles(lerp_angles(current, desired, aim_blend));
+		// Aim noise: random jitter +/- noise_deg/2 on pitch and yaw.
+		// Recruit ~4.5 deg of slop, Elite ~0.4 deg.
+		if(self.bot_aim_noise_deg > 0)
+		{
+			n = self.bot_aim_noise_deg;
+			noise_pitch = randomfloat(n) - n * 0.5;
+			noise_yaw   = randomfloat(n) - n * 0.5;
+			desired = (desired[0] + noise_pitch, desired[1] + noise_yaw, 0);
+		}
+
+		current = self getPlayerAngles();
+		self setPlayerAngles(lerp_angles(current, desired, self.bot_aim_blend));
 
 		yaw_err   = abs_angle(angle_delta(current[1], desired[1]));
 		pitch_err = abs_angle(angle_delta(current[0], desired[0]));
 
-		on_target = (yaw_err < fire_angle_deg && pitch_err < fire_angle_deg);
-		ready     = (gettime() - self.bot_fire_time >= fire_cooldown_ms);
+		on_target = (yaw_err < self.bot_fire_angle_deg && pitch_err < self.bot_fire_angle_deg);
+		ready     = (gettime() - self.bot_fire_time >= self.bot_fire_cooldown_ms);
 
 		if(on_target && ready)
 		{

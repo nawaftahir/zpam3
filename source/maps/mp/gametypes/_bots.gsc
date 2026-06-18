@@ -20,7 +20,12 @@ Init()
 	registerCvarEx("I", "scr_bots_freeze", "BOOL", 1); 		// freeze bots movement
 	registerCvarEx("I", "scr_bots_spam", "FLOAT", 0); 		// periodically connect and disconnect a bot - the value set time cycle in seconds
 	registerCvarEx("I", "scr_bots_ai", "BOOL", 0); 			// master AI switch - when 1 bots run brain (perception+combat); set scr_bots_freeze 0 first
-	registerCvarEx("I", "debug_bots", "BOOL", 0); 			// log brain decisions to chat
+	registerCvarEx("I", "scr_bots_skill", "INT", 2, 0, 4); 		// 0=random per bot, 1=recruit, 2=regular, 3=veteran, 4=elite
+	registerCvarEx("I", "debug_bots", "BOOL", 0); 			// log brain decisions to chat + skill overlay
+
+	scripts\bots\_bot_pool::init();
+	scripts\bots\_bot_waypoints::init();
+	scripts\bots\_bot_debug::init();
 }
 
 
@@ -64,6 +69,8 @@ onCvarChanged(cvar, value, isRegisterTime)
 		case "scr_bots_spam": 			thread spam_bot(value);		return true;
 
 		case "scr_bots_ai": 			level.bots_ai = value;			return true;
+
+		case "scr_bots_skill": 			level.bots_skill = value;		return true;
 
 		case "debug_bots": 			level.debug_bots = value;		return true;
 
@@ -334,14 +341,30 @@ bot_think()
 			wait level.fps_multiplier * 0.2;
 		}
 
-		if (!isDefined(self.pers["weapon"]))
+		// Re-pick weapon if pers slot missing OR bot spawned empty-handed
+		// (map_restart / round reset can drop the live weapon while pers stays set).
+		// Cooldown so we don't spam notify 5x/sec on bots that can't equip yet.
+		if (!isDefined(self.bot_weapon_recheck_ms))
+			self.bot_weapon_recheck_ms = 0;
+
+		need_weapon = !isDefined(self.pers["weapon"]);
+		if (!need_weapon && isAlive(self) && gettime() >= self.bot_weapon_recheck_ms)
 		{
-			// Select weapon
+			cw = self getCurrentWeapon();
+			if (!isDefined(cw) || cw == "none" || cw == "")
+				need_weapon = true;
+		}
+
+		if (need_weapon)
+		{
+			self.pers["weapon"] = undefined;
+
 			if(self.pers["team"] == "allies")
 				self notify("menuresponse", game["menu_weapon_allies"], "random");
 			else if(self.pers["team"] == "axis")
 				self notify("menuresponse", game["menu_weapon_axis"], "random");
 
+			self.bot_weapon_recheck_ms = gettime() + 2000;
 			wait level.fps_multiplier * 0.2;
 		}
 
