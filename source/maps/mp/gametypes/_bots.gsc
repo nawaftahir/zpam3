@@ -17,6 +17,7 @@ Init()
 	registerCvarEx("I", "scr_bots_add", "INT", 0, 0, 64); 		// add <num> bots to the server
 	registerCvarEx("I", "scr_bots_remove", "INT", 0, 0, 64); 	// remove <num> bots from the server
 	registerCvarEx("I", "scr_bots_removeAll", "BOOL", 0);		// remove all bots from server
+	registerCvarEx("I", "scr_bots_target", "INT", 0, 0, 64);	// keep this many bots on the server; auto-refills on map change + at runtime
 	registerCvarEx("I", "scr_bots_freeze", "BOOL", 1); 		// freeze bots movement
 	registerCvarEx("I", "scr_bots_spam", "FLOAT", 0); 		// periodically connect and disconnect a bot - the value set time cycle in seconds
 	registerCvarEx("I", "scr_bots_ai", "BOOL", 0); 			// master AI switch - when 1 bots run brain (perception+combat); set scr_bots_freeze 0 first
@@ -43,6 +44,17 @@ Init()
 	scripts\bots\_bot_pool::init();
 	scripts\bots\_bot_waypoints::init();
 	scripts\bots\_bot_debug::init();
+
+	// Auto-fill once the level is up. wait covers the brief window where
+	// existing bots may still be in the disconnect/reconnect bug path from
+	// onConnecting (lines 113-117 below).
+	level thread autoFillOnLevelStart();
+}
+
+autoFillOnLevelStart()
+{
+	wait level.fps_multiplier * 2.0;
+	fillBotsToTarget();
 }
 
 
@@ -79,6 +91,12 @@ onCvarChanged(cvar, value, isRegisterTime)
 				thread removeBots(64);
 				changeCvarQuiet("scr_bots_removeAll", 0);
 			}
+			return true;
+
+		case "scr_bots_target":
+			level.bots_target = value;
+			if (!isRegisterTime)
+				thread fillBotsToTarget();
 			return true;
 
 		case "scr_bots_freeze": 		level.bots_freeze = value;		return true;
@@ -216,6 +234,48 @@ removeBots(number)
 
 			wait level.fps_multiplier * 0.1;
 		}
+	}
+}
+
+
+// Total bot count currently on the server. Walks players[] rather than
+// using level.bot_pool_all so it works before the pool refresh has run
+// (which matters at the autoFillOnLevelStart call right after map load).
+countBots()
+{
+	n = 0;
+	players = getentarray("player", "classname");
+	for(i = 0; i < players.size; i++)
+	{
+		p = players[i];
+		if(isDefined(p.pers) && isDefined(p.pers["isBot"]) && p.pers["isBot"])
+			n += 1;
+	}
+	return n;
+}
+
+// Drive bot count toward scr_bots_target without the operator typing
+// scr_bots_add every map. Fires from onCvarChanged when target changes
+// AND once shortly after every level start.
+fillBotsToTarget()
+{
+	target = 0;
+	if (isDefined(level.bots_target))
+		target = level.bots_target;
+	if (target <= 0)
+		return;
+
+	current = countBots();
+	delta = target - current;
+
+	if (delta > 0)
+	{
+		iprintln("Filling " + delta + " bots to reach target " + target);
+		thread addBots(delta);
+	}
+	else if (delta < 0)
+	{
+		thread removeBots(0 - delta);   // 0 - x because unary minus on identifier doesnt parse
 	}
 }
 

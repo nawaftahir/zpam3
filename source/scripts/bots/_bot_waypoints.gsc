@@ -157,9 +157,10 @@ pick_for_bot(bot_idx)
 		return undefined;
 
 	n = level.bot_waypoints.size;
+	half = int(n / 2);     // n/2 produces float in GSC; randomint needs int
 	window = 5;
-	if (window > n / 2)
-		window = n / 2;
+	if (window > half)
+		window = half;
 	if (window < 1)
 		window = 1;
 
