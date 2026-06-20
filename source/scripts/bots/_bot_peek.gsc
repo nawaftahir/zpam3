@@ -123,7 +123,7 @@ apply_peek(action)
 	else if(action == "prone")
 		self setBotStance("prone");
 
-	self scripts\bots\_bot_log::log_event("peek", "3", action);
+	self scripts\bots\_bot_log::log_event("peek", "peek", "3", action);
 }
 
 clear_peek()

@@ -24,7 +24,21 @@ Init()
 	registerCvarEx("I", "scr_bots_waypoints_save", "BOOL", 1);	// async-save the waypoint graph at intermission to bot_waypoints/<map>.json
 	registerCvarEx("I", "scr_bots_waypoints_load", "BOOL", 1);	// sync-load the waypoint graph on init from bot_waypoints/<map>.json
 	registerCvarEx("I", "scr_bots_profiles_load", "BOOL", 1);	// overlay skill tier knobs from bot_profiles.json (recruit/regular/veteran/elite)
-	registerCvarEx("I", "debug_bots", "BOOL", 0); 			// log brain decisions to chat + skill overlay
+	registerCvarEx("I", "debug_bots", "BOOL", 0); 			// master debug — when 1, enables all categories below
+	registerCvarEx("I", "debug_bot_perception", "BOOL", 0);	// saw / lost / switch target
+	registerCvarEx("I", "debug_bot_combat", "BOOL", 0);		// trigger pulled
+	registerCvarEx("I", "debug_bot_movement", "BOOL", 0);	// stuck / jump recovery
+	registerCvarEx("I", "debug_bot_peek", "BOOL", 0);		// lean / jump-shot / prone
+	registerCvarEx("I", "debug_bot_spawn", "BOOL", 0);		// bot spawn / lifecycle
+	registerCvarEx("I", "debug_bot_waypoints", "BOOL", 0);	// waypoint load / save
+
+	level.debug_bot_flags = [];
+	level.debug_bot_flags["perception"] = 0;
+	level.debug_bot_flags["combat"]     = 0;
+	level.debug_bot_flags["movement"]   = 0;
+	level.debug_bot_flags["peek"]       = 0;
+	level.debug_bot_flags["spawn"]      = 0;
+	level.debug_bot_flags["waypoints"]  = 0;
 
 	scripts\bots\_bot_pool::init();
 	scripts\bots\_bot_waypoints::init();
@@ -76,6 +90,13 @@ onCvarChanged(cvar, value, isRegisterTime)
 		case "scr_bots_skill": 			level.bots_skill = value;		return true;
 
 		case "debug_bots": 			level.debug_bots = value;		return true;
+
+		case "debug_bot_perception": 	level.debug_bot_flags["perception"] = value;	return true;
+		case "debug_bot_combat":		level.debug_bot_flags["combat"]     = value;	return true;
+		case "debug_bot_movement":		level.debug_bot_flags["movement"]   = value;	return true;
+		case "debug_bot_peek":			level.debug_bot_flags["peek"]       = value;	return true;
+		case "debug_bot_spawn":			level.debug_bot_flags["spawn"]      = value;	return true;
+		case "debug_bot_waypoints":		level.debug_bot_flags["waypoints"]  = value;	return true;
 
 	}
 	return false;

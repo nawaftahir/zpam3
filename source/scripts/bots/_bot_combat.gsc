@@ -73,7 +73,7 @@ run()
 		{
 			self thread fire_pulse();
 			self.bot_fire_time = gettime();
-			self scripts\bots\_bot_log::log_event("fired", "6", enemy.name);
+			self scripts\bots\_bot_log::log_event("combat", "fired", "6", enemy.name);
 		}
 	}
 }

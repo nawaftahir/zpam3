@@ -6,6 +6,11 @@
 //                          view at the enemy, so "forward" = toward enemy)
 //   close enough        -> stop walking, let combat handle the kill
 //
+// Idle turning is rate-limited: the bot tracks a self.bot_desired_yaw and
+// each tick rotates current yaw toward it by at most idle_turn_rate_dps
+// degrees per second. Replaces the v0 random-360-snap which made bots look
+// like obvious bots.
+//
 // Stuck recovery: if the bot has not moved more than stuck_eps units in
 // stuck_check_ms while it is supposed to be walking, pulse a jump.
 //
@@ -14,19 +19,22 @@ run()
 {
 	self endon("disconnect");
 
-	walk_speed       = 127;     // setWalkValues max forward magnitude
-	engage_range     = 350;     // stop within this 3D distance
-	stuck_check_ms   = 2000;    // ms with no real displacement = "stuck"
-	stuck_eps_sq     = 256;     // 16^2 — less than this = stuck
-	wander_trace_len = 200;     // forward clearance check distance
-	wander_repick_ms = 2500;    // ms between random heading picks while idle
-	strafe_flip_ms   = 700;     // ms between strafe direction flips under fire
+	walk_speed         = 127;     // setWalkValues max forward magnitude
+	engage_range       = 350;     // stop within this 3D distance
+	stuck_check_ms     = 2000;    // ms with no real displacement = "stuck"
+	stuck_eps_sq       = 256;     // 16^2 — less than this = stuck
+	wander_trace_len   = 200;     // forward clearance check distance
+	wander_repick_ms   = 3500;    // ms between idle look-around drift picks
+	strafe_flip_ms     = 700;     // ms between strafe direction flips under fire
+	idle_turn_rate_dps = 180;     // max idle yaw rotation, deg/sec
+	idle_drift_deg     = 35;      // when no waypoint, drift current yaw +/- this
 
 	self.bot_last_origin       = self.origin;
 	self.bot_last_origin_time  = gettime();
 	self.bot_wander_until      = 0;
 	self.bot_strafe_until      = 0;
 	self.bot_strafe_dir        = 0;
+	self.bot_desired_yaw       = (self getPlayerAngles())[1];
 
 	if(isDefined(self.bot_phase))
 		wait level.fps_multiplier * self.bot_phase;
@@ -58,20 +66,22 @@ run()
 			goal = pick_idle_goal();
 			step_target = resolve_path_target(goal);
 
-			if(gettime() > self.bot_wander_until || isDefined(step_target))
+			// Pick new desired_yaw on path change or wander repick.
+			if(isDefined(step_target))
 			{
-				if(isDefined(step_target))
-				{
-					face = vectortoangles(step_target - self.origin);
-					self setPlayerAngles((0, face[1], 0));
-				}
-				else
-				{
-					yaw = randomint(360);
-					self setPlayerAngles((0, yaw, 0));
-				}
+				face = vectortoangles(step_target - self.origin);
+				self.bot_desired_yaw = face[1];
+			}
+			else if(gettime() > self.bot_wander_until)
+			{
+				// Small look-around drift, NOT full random 0..360.
+				cur = self getPlayerAngles();
+				self.bot_desired_yaw = cur[1] + (randomint(idle_drift_deg * 2 + 1) - idle_drift_deg);
 				self.bot_wander_until = gettime() + wander_repick_ms;
 			}
+
+			// Rate-limit the actual turn so bots rotate at human-like speed.
+			turn_toward_desired_yaw(idle_turn_rate_dps, 0.1);
 
 			fwd = anglestoforward(self getPlayerAngles());
 			ahead = (self.origin[0] + fwd[0] * wander_trace_len,
@@ -196,7 +206,7 @@ pick_idle_goal()
 
 	if(randomint(100) < 50)
 	{
-		wp = scripts\bots\_bot_waypoints::pick_random();
+		wp = scripts\bots\_bot_waypoints::pick_for_bot(self getEntityNumber());
 		if(isDefined(wp))
 		{
 			if(distanceSquared(self.origin, wp) > goal_reach_sq)
@@ -205,6 +215,34 @@ pick_idle_goal()
 	}
 
 	return undefined;
+}
+
+// Rotate current yaw toward self.bot_desired_yaw by at most rate_dps degrees
+// per second. Called each idle tick to give human-like turning.
+turn_toward_desired_yaw(rate_dps, dt_sec)
+{
+	if(!isDefined(self.bot_desired_yaw))
+		return;
+
+	cur = self getPlayerAngles();
+	diff = mv_angle_delta(cur[1], self.bot_desired_yaw);
+
+	max_step = rate_dps * dt_sec;
+	if(diff >  max_step) diff =  max_step;
+	if(diff < -max_step) diff = -max_step;
+
+	self setPlayerAngles((0, cur[1] + diff, 0));
+}
+
+// Shortest-arc angle delta in degrees, result in (-180, 180]. Named with
+// mv_ prefix to avoid clashing with _bot_combat's angle_delta if both
+// modules ever get co-loaded into the same namespace.
+mv_angle_delta(from_deg, to_deg)
+{
+	d = to_deg - from_deg;
+	if(d > 180)  d -= 360;
+	if(d < -180) d += 360;
+	return d;
 }
 
 update_stuck()
@@ -221,7 +259,7 @@ update_stuck()
 	{
 		self thread jump_pulse();
 		self.bot_last_origin_time = gettime();
-		self scripts\bots\_bot_log::log_event("stuck", "3", "jumping");
+		self scripts\bots\_bot_log::log_event("movement", "stuck", "3", "jumping");
 	}
 }
 

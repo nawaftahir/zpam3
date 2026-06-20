@@ -65,7 +65,7 @@ run()
 	// keyed off entity number per CLAUDE.md AI/Bot perf rule.
 	self.bot_phase = (self getEntityNumber() % 5) * 0.02;
 
-	self scripts\bots\_bot_log::log_event("spawned", "5", self.bot_skill_name);
+	self scripts\bots\_bot_log::log_event("spawn", "spawned", "5", self.bot_skill_name);
 
 	self thread scripts\bots\_bot_perception::run();
 	self thread scripts\bots\_bot_combat::run();

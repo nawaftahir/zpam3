@@ -114,11 +114,11 @@ run()
 		// Color logging on state changes (chat + server log)
 		prev = self.bot_enemy;
 		if(!isDefined(prev) && isDefined(committed))
-			self scripts\bots\_bot_log::log_event("saw", "2", committed.name);
+			self scripts\bots\_bot_log::log_event("perception", "saw", "2", committed.name);
 		else if(isDefined(prev) && !isDefined(committed))
-			self scripts\bots\_bot_log::log_event("lost", "1", prev.name);
+			self scripts\bots\_bot_log::log_event("perception", "lost", "1", prev.name);
 		else if(isDefined(prev) && isDefined(committed) && prev != committed)
-			self scripts\bots\_bot_log::log_event("switch", "3", prev.name + " -> " + committed.name);
+			self scripts\bots\_bot_log::log_event("perception", "switch", "3", prev.name + " -> " + committed.name);
 
 		self.bot_enemy = committed;
 		if(isDefined(committed))

@@ -144,6 +144,32 @@ pick_random()
 	return level.bot_waypoints[idx];
 }
 
+// Anti-clumping pick: spread N bots across the waypoint pool by biasing each
+// bot toward a different starting index, then random-jitter within a small
+// window. Combined with a slow time drift the bots roam instead of all
+// converging on whichever waypoint pick_random() happened to return first.
+//
+// bot_idx is normally self getEntityNumber(). 7 is co-prime with most pool
+// sizes we hit (16..64) so successive bots actually spread.
+pick_for_bot(bot_idx)
+{
+	if(!isDefined(level.bot_waypoints) || level.bot_waypoints.size == 0)
+		return undefined;
+
+	n = level.bot_waypoints.size;
+	window = 5;
+	if (window > n / 2)
+		window = n / 2;
+	if (window < 1)
+		window = 1;
+
+	drift = int(gettime() / 4000);
+	base = (bot_idx * 7 + drift) % n;
+	offset = randomint(window * 2 + 1) - window;
+	idx = (base + offset + n) % n;
+	return level.bot_waypoints[idx];
+}
+
 // ---------------------------------------------------------------------------
 // JSON persistence
 // ---------------------------------------------------------------------------
@@ -276,7 +302,11 @@ register_job(jobId)
 {
 	if (!isDefined(level.bot_wp_jobs))
 		level.bot_wp_jobs = [];
+	if (!isDefined(level.bot_wp_jobs_count))
+		level.bot_wp_jobs_count = 0;
+
 	level.bot_wp_jobs[jobId] = true;
+	level.bot_wp_jobs_count += 1;
 
 	if (isDefined(level.bot_wp_poller_running) && level.bot_wp_poller_running)
 		return;
@@ -299,21 +329,13 @@ async_poller()
 			if (!isDefined(level.bot_wp_jobs[jobId]))
 				continue;  // someone else's job, leave it for them
 			level.bot_wp_jobs[jobId] = undefined;
+			level.bot_wp_jobs_count -= 1;
 			json_async_result(jobId);  // discard - save returns 1/undefined
 		}
 
-		// Stop when our queue drains; a new submission relights the poller.
-		any = false;
-		keys = getArrayKeys(level.bot_wp_jobs);
-		for (i = 0; i < keys.size; i++)
-		{
-			if (isDefined(level.bot_wp_jobs[keys[i]]))
-			{
-				any = true;
-				break;
-			}
-		}
-		if (!any)
+		// Counter-based termination — getArrayKeys() chokes on an array of
+		// all-undefined slots, so we track pending count explicitly.
+		if (level.bot_wp_jobs_count <= 0)
 			break;
 	}
 	level.bot_wp_poller_running = false;
