@@ -71,4 +71,5 @@ run()
 	self thread scripts\bots\_bot_combat::run();
 	self thread scripts\bots\_bot_movement::run();
 	self thread scripts\bots\_bot_peek::run();
+	self thread scripts\bots\_bot_traverse::run();
 }

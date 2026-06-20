@@ -55,6 +55,11 @@ run()
 		if(self getSpeed() < min_speed_walk)
 			continue;
 
+		// Don't jump-vault while peeking — the peek module is already
+		// pulsing setBotStance, we don't want the two threads fighting.
+		if(isDefined(self.bot_peek_action) && self.bot_peek_action != "")
+			continue;
+
 		if(!needs_vault(reach, feet_h, chest_h, head_h))
 			continue;
 

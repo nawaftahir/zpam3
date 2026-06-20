@@ -33,13 +33,24 @@ Init()
 	registerCvarEx("I", "debug_bot_spawn", "BOOL", 0);		// bot spawn / lifecycle
 	registerCvarEx("I", "debug_bot_waypoints", "BOOL", 0);	// waypoint load / save
 
+	// Pull current cvar values so debug flags survive map changes. Setting
+	// level.debug_bot_flags = [] right after registerCvarEx wipes whatever
+	// the register-time onCvarChanged just stashed, so we read from cvar
+	// state directly. Same for level.debug_bots / level.bots_freeze etc —
+	// they get refreshed via the case handlers at register time but a
+	// secondary read here is cheap and bulletproof against load order.
 	level.debug_bot_flags = [];
-	level.debug_bot_flags["perception"] = 0;
-	level.debug_bot_flags["combat"]     = 0;
-	level.debug_bot_flags["movement"]   = 0;
-	level.debug_bot_flags["peek"]       = 0;
-	level.debug_bot_flags["spawn"]      = 0;
-	level.debug_bot_flags["waypoints"]  = 0;
+	level.debug_bot_flags["perception"] = getCvarInt("debug_bot_perception");
+	level.debug_bot_flags["combat"]     = getCvarInt("debug_bot_combat");
+	level.debug_bot_flags["movement"]   = getCvarInt("debug_bot_movement");
+	level.debug_bot_flags["peek"]       = getCvarInt("debug_bot_peek");
+	level.debug_bot_flags["spawn"]      = getCvarInt("debug_bot_spawn");
+	level.debug_bot_flags["waypoints"]  = getCvarInt("debug_bot_waypoints");
+	level.debug_bots                    = getCvarInt("debug_bots");
+	level.bots_freeze                   = getCvarInt("scr_bots_freeze");
+	level.bots_ai                       = getCvarInt("scr_bots_ai");
+	level.bots_skill                    = getCvarInt("scr_bots_skill");
+	level.bots_target                   = getCvarInt("scr_bots_target");
 
 	scripts\bots\_bot_pool::init();
 	scripts\bots\_bot_waypoints::init();

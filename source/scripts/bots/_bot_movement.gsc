@@ -26,7 +26,7 @@ run()
 	wander_trace_len   = 200;     // forward clearance check distance
 	wander_repick_ms   = 3500;    // ms between idle look-around drift picks
 	strafe_flip_ms     = 700;     // ms between strafe direction flips under fire
-	idle_turn_rate_dps = 180;     // max idle yaw rotation, deg/sec
+	idle_turn_rate_dps = 320;     // max idle yaw rotation, deg/sec — fast enough not to look frozen
 	idle_drift_deg     = 35;      // when no waypoint, drift current yaw +/- this
 
 	self.bot_last_origin       = self.origin;
@@ -215,7 +215,59 @@ pick_idle_goal()
 		}
 	}
 
+	// Fallback when no waypoints exist yet (fresh map, sampler still seeding).
+	// Bias toward an enemy team spawn point so bots actually push instead of
+	// wandering aimlessly into a wall while looking "real slow."
+	sp = pick_enemy_spawn();
+	if(isDefined(sp))
+	{
+		if(distanceSquared(self.origin, sp) > goal_reach_sq)
+			return sp;
+	}
+
 	return undefined;
+}
+
+// Pick any spawn point from the map as a wander destination. Caches on first
+// call so we don't sweep getentarray each idle pick. Returns undefined if no
+// spawns of any known classname exist (engine race during startup) — caller
+// then falls back to the random-yaw drift.
+//
+// We grab ALL known team/gametype spawn classnames into one pool because
+// the bot just needs SOMEWHERE to go; targeting "enemy spawns" specifically
+// would require gametype dispatch and most maps lay out their team spawns
+// far enough apart that any spawn point is a reasonable push direction.
+pick_enemy_spawn()
+{
+	if(!isDefined(level.bot_spawn_cache))
+		level.bot_spawn_cache = collect_spawn_origins();
+
+	pool = level.bot_spawn_cache;
+	if(pool.size == 0)
+		return undefined;
+
+	idx = (self getEntityNumber() * 3 + int(gettime() / 8000)) % pool.size;
+	return pool[idx];
+}
+
+collect_spawn_origins()
+{
+	names = [];
+	names[0] = "mp_dm_spawn";
+	names[1] = "mp_tdm_spawn";
+	names[2] = "mp_ctf_spawn_allied";
+	names[3] = "mp_ctf_spawn_axis";
+	names[4] = "mp_sd_spawn_attacker";
+	names[5] = "mp_sd_spawn_defender";
+
+	pool = [];
+	for(j = 0; j < names.size; j++)
+	{
+		ents = getentarray(names[j], "classname");
+		for(i = 0; i < ents.size; i++)
+			pool[pool.size] = ents[i].origin;
+	}
+	return pool;
 }
 
 // Rotate current yaw toward self.bot_desired_yaw by at most rate_dps degrees
