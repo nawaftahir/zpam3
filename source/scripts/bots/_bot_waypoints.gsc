@@ -254,8 +254,67 @@ submit_save()
 		return;
 	}
 
+	register_job(jobId);
+
 	// Only chatter on the final intermission save; the debounced per-tick
 	// saves stay silent to keep the chat readable during play.
 	if (game["state"] == "intermission")
 		iprintln("^5[bot] ^7waypoints: saving " + level.bot_waypoints.size + " to " + wp_path());
+}
+
+// ---------------------------------------------------------------------------
+// Async-job bookkeeping
+// ---------------------------------------------------------------------------
+//
+// Every successful json_save_async submission MUST be paired with a
+// json_async_result() call to claim+free the job. Without it, the engine
+// queue fills (cap is scr_bots_async_max_jobs, default 64) and further
+// submissions fail with "too many pending jobs". We track jobs we own on
+// level.bot_wp_jobs, run one shared poller while any are in flight.
+
+register_job(jobId)
+{
+	if (!isDefined(level.bot_wp_jobs))
+		level.bot_wp_jobs = [];
+	level.bot_wp_jobs[jobId] = true;
+
+	if (isDefined(level.bot_wp_poller_running) && level.bot_wp_poller_running)
+		return;
+	level.bot_wp_poller_running = true;
+	level thread async_poller();
+}
+
+async_poller()
+{
+	level endon("intermission");
+
+	for (;;)
+	{
+		wait level.fps_multiplier * 0.1;
+
+		done = json_async_done();
+		for (i = 0; i < done.size; i++)
+		{
+			jobId = done[i];
+			if (!isDefined(level.bot_wp_jobs[jobId]))
+				continue;  // someone else's job, leave it for them
+			level.bot_wp_jobs[jobId] = undefined;
+			json_async_result(jobId);  // discard - save returns 1/undefined
+		}
+
+		// Stop when our queue drains; a new submission relights the poller.
+		any = false;
+		keys = getArrayKeys(level.bot_wp_jobs);
+		for (i = 0; i < keys.size; i++)
+		{
+			if (isDefined(level.bot_wp_jobs[keys[i]]))
+			{
+				any = true;
+				break;
+			}
+		}
+		if (!any)
+			break;
+	}
+	level.bot_wp_poller_running = false;
 }
