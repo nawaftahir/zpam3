@@ -24,6 +24,13 @@ run()
 	self.bot_fire_cooldown_ms = prof.fire_cooldown_ms;
 	self.bot_fire_angle_deg  = prof.fire_angle_deg;
 
+	self.bot_peek_chance_per_sec = prof.peek_chance_per_sec;
+	self.bot_peek_lean_enabled   = prof.peek_lean_enabled;
+	self.bot_peek_jump_enabled   = prof.peek_jump_enabled;
+	self.bot_peek_prone_range_sq = prof.peek_prone_range_sq;
+	self.bot_peek_duration_ms    = prof.peek_duration_ms;
+	self.bot_peek_cooldown_ms    = prof.peek_cooldown_ms;
+
 	self.bot_enemy        = undefined;
 	self.bot_react_until  = undefined;
 	self.bot_fire_time    = 0;
@@ -63,4 +70,5 @@ run()
 	self thread scripts\bots\_bot_perception::run();
 	self thread scripts\bots\_bot_combat::run();
 	self thread scripts\bots\_bot_movement::run();
+	self thread scripts\bots\_bot_peek::run();
 }

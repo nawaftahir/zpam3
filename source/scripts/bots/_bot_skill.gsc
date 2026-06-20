@@ -77,6 +77,19 @@ apply_one(slot, key, data)
 		p.fire_cooldown_ms = src["fire_cooldown_ms"];
 	if (isDefined(src["fire_angle_deg"]))
 		p.fire_angle_deg = src["fire_angle_deg"];
+
+	if (isDefined(src["peek_chance_per_sec"]))
+		p.peek_chance_per_sec = src["peek_chance_per_sec"];
+	if (isDefined(src["peek_lean_enabled"]))
+		p.peek_lean_enabled = src["peek_lean_enabled"];
+	if (isDefined(src["peek_jump_enabled"]))
+		p.peek_jump_enabled = src["peek_jump_enabled"];
+	if (isDefined(src["peek_prone_range"]))
+		p.peek_prone_range_sq = src["peek_prone_range"] * src["peek_prone_range"];
+	if (isDefined(src["peek_duration_ms"]))
+		p.peek_duration_ms = src["peek_duration_ms"];
+	if (isDefined(src["peek_cooldown_ms"]))
+		p.peek_cooldown_ms = src["peek_cooldown_ms"];
 }
 
 // view_dist_sq: squared world-units, used directly without sqrt
@@ -86,6 +99,16 @@ apply_one(slot, key, data)
 // aim_noise_deg: +/- degrees of random jitter added to each aim sample
 // fire_cooldown_ms: ms between trigger pulses
 // fire_angle_deg: aim must be within this angle of target before firing
+//
+// Combat peek knobs (consumed by scripts\bots\_bot_peek):
+//   peek_chance_per_sec : probability of starting a peek action per second
+//                         of engagement (0 = never peek)
+//   peek_lean_enabled   : 1 = may use setLean(left|right)
+//   peek_jump_enabled   : 1 = may pulse a jump-shot
+//   peek_prone_range_sq : >0 = may drop prone if target is further than this
+//                         (squared world-units; 0 = never prone)
+//   peek_duration_ms    : how long a single peek action is held
+//   peek_cooldown_ms    : minimum gap between peeks
 
 recruit()
 {
@@ -97,6 +120,12 @@ recruit()
 	p.aim_noise_deg   = 4.5;
 	p.fire_cooldown_ms = 400;
 	p.fire_angle_deg  = 10;
+	p.peek_chance_per_sec = 0.0;
+	p.peek_lean_enabled   = 0;
+	p.peek_jump_enabled   = 0;
+	p.peek_prone_range_sq = 0;
+	p.peek_duration_ms    = 700;
+	p.peek_cooldown_ms    = 2500;
 	return p;
 }
 
@@ -110,6 +139,12 @@ regular()
 	p.aim_noise_deg   = 2.5;
 	p.fire_cooldown_ms = 300;
 	p.fire_angle_deg  = 8;
+	p.peek_chance_per_sec = 0.05;
+	p.peek_lean_enabled   = 1;
+	p.peek_jump_enabled   = 0;
+	p.peek_prone_range_sq = 0;
+	p.peek_duration_ms    = 700;
+	p.peek_cooldown_ms    = 2200;
 	return p;
 }
 
@@ -123,6 +158,12 @@ veteran()
 	p.aim_noise_deg   = 1.0;
 	p.fire_cooldown_ms = 220;
 	p.fire_angle_deg  = 6;
+	p.peek_chance_per_sec = 0.15;
+	p.peek_lean_enabled   = 1;
+	p.peek_jump_enabled   = 1;
+	p.peek_prone_range_sq = 0;
+	p.peek_duration_ms    = 800;
+	p.peek_cooldown_ms    = 1800;
 	return p;
 }
 
@@ -136,6 +177,12 @@ elite()
 	p.aim_noise_deg   = 0.4;
 	p.fire_cooldown_ms = 180;
 	p.fire_angle_deg  = 4;
+	p.peek_chance_per_sec = 0.30;
+	p.peek_lean_enabled   = 1;
+	p.peek_jump_enabled   = 1;
+	p.peek_prone_range_sq = 900 * 900;
+	p.peek_duration_ms    = 900;
+	p.peek_cooldown_ms    = 1400;
 	return p;
 }
 
