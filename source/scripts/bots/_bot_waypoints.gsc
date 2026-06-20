@@ -3,11 +3,14 @@
 // Auto-seeded waypoint ring buffer. One level thread samples every alive
 // player's origin every sample_ms; if no existing waypoint is within
 // min_spacing of that origin, the new origin is appended. Cap at max_wp:
-// when full, overwrite oldest. No persistence — rebuilds each map.
+// when full, overwrite oldest. Graph persists across maps via JSON.
 //
 // Purpose: idle bots pull a random waypoint as a wander goal instead of a
 // pure-random yaw, so they bias toward places players actually walk through.
 // Foundation for the real graph + A* iteration later.
+//
+// Persistence: bot_waypoints/<mapname>.json. Loaded on init (sync), saved
+// at intermission (async). Toggled by scr_bots_waypoints_save / _load.
 
 init()
 {
@@ -17,12 +20,17 @@ init()
 	level.bot_wp_max       = 64;
 	level.bot_wp_link_dist_sq = 600 * 600;
 	level.bot_wp_link_max  = 6;
+
+	if (getCvarInt("scr_bots_waypoints_load"))
+		try_load();
+
+	level thread save_watcher();
 	level thread run();
 }
 
 run()
 {
-	level endon("game_ended");
+	level endon("intermission");
 
 	sample_ms       = 1000;
 	min_spacing     = 200;
@@ -132,4 +140,88 @@ pick_random()
 		return undefined;
 	idx = randomint(level.bot_waypoints.size);
 	return level.bot_waypoints[idx];
+}
+
+// ---------------------------------------------------------------------------
+// JSON persistence
+// ---------------------------------------------------------------------------
+
+wp_path()
+{
+	return "bot_waypoints/" + getCvar("mapname") + ".json";
+}
+
+// Sync load at init. json_load returns undefined if the file is missing or
+// malformed, so falling through leaves the graph empty and the sampler fills
+// it from live play, same as the old behavior.
+try_load()
+{
+	data = json_load(wp_path());
+	if (!isDefined(data))
+		return;
+
+	if (!isDefined(data["version"]) || data["version"] != 1)
+		return;
+	if (!isDefined(data["waypoints"]) || !isDefined(data["neighbors"]))
+		return;
+
+	wps = data["waypoints"];
+	nbs = data["neighbors"];
+
+	// JSON arrays come back as integer-indexed GSC arrays; vectors come back
+	// as 3-element float arrays, recompose.
+	loaded = 0;
+	for (i = 0; i < wps.size; i++)
+	{
+		v = wps[i];
+		if (!isDefined(v) || !isDefined(v[0]) || !isDefined(v[1]) || !isDefined(v[2]))
+			continue;
+		level.bot_waypoints[loaded] = (v[0], v[1], v[2]);
+
+		nb = [];
+		if (isDefined(nbs[i]))
+		{
+			src = nbs[i];
+			for (j = 0; j < src.size; j++)
+				if (isDefined(src[j]))
+					nb[nb.size] = src[j];
+		}
+		level.bot_wp_neighbors[loaded] = nb;
+		loaded += 1;
+	}
+
+	if (isDefined(data["head"]))
+		level.bot_wp_head = data["head"];
+
+	if (loaded > 0)
+		iprintln("^5[bot] ^7waypoints: loaded " + loaded + " from " + wp_path());
+}
+
+// Async save fired once at intermission. Builds a struct mirroring the
+// load schema, hands it to json_save_async, and never blocks the script VM.
+// zpam3 fires "intermission" in _end_of_map::Do_Map_End right before
+// players are spawned into the post-game scoreboard.
+save_watcher()
+{
+	level waittill("intermission");
+
+	if (!getCvarInt("scr_bots_waypoints_save"))
+		return;
+	if (!isDefined(level.bot_waypoints) || level.bot_waypoints.size == 0)
+		return;
+
+	out = spawnstruct();
+	out.version    = 1;
+	out.map        = getCvar("mapname");
+	out.head       = level.bot_wp_head;
+	out.waypoints  = level.bot_waypoints;
+	out.neighbors  = level.bot_wp_neighbors;
+
+	jobId = json_save_async(wp_path(), out, 1);
+	if (jobId == 0)
+	{
+		iprintln("^1[bot] ^7waypoints: async save submit failed for " + wp_path());
+		return;
+	}
+	iprintln("^5[bot] ^7waypoints: saving " + level.bot_waypoints.size + " to " + wp_path());
 }

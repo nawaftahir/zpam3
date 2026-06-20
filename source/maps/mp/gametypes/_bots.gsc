@@ -21,6 +21,9 @@ Init()
 	registerCvarEx("I", "scr_bots_spam", "FLOAT", 0); 		// periodically connect and disconnect a bot - the value set time cycle in seconds
 	registerCvarEx("I", "scr_bots_ai", "BOOL", 0); 			// master AI switch - when 1 bots run brain (perception+combat); set scr_bots_freeze 0 first
 	registerCvarEx("I", "scr_bots_skill", "INT", 2, 0, 4); 		// 0=random per bot, 1=recruit, 2=regular, 3=veteran, 4=elite
+	registerCvarEx("I", "scr_bots_waypoints_save", "BOOL", 1);	// async-save the waypoint graph at intermission to bot_waypoints/<map>.json
+	registerCvarEx("I", "scr_bots_waypoints_load", "BOOL", 1);	// sync-load the waypoint graph on init from bot_waypoints/<map>.json
+	registerCvarEx("I", "scr_bots_profiles_load", "BOOL", 1);	// overlay skill tier knobs from bot_profiles.json (recruit/regular/veteran/elite)
 	registerCvarEx("I", "debug_bots", "BOOL", 0); 			// log brain decisions to chat + skill overlay
 
 	scripts\bots\_bot_pool::init();

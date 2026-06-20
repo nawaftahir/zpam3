@@ -18,7 +18,7 @@ init()
 
 run()
 {
-	level endon("game_ended");
+	level endon("intermission");
 	pool_rebuild_ms = 200;
 
 	for(;;)

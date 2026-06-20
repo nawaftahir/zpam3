@@ -26,6 +26,57 @@ build_profiles()
 	level.bot_profiles[2] = regular();
 	level.bot_profiles[3] = veteran();
 	level.bot_profiles[4] = elite();
+
+	if (getCvarInt("scr_bots_profiles_load"))
+		try_load_overrides();
+}
+
+// Optional JSON overlay. Lets server owners tune knobs without recompiling.
+// Schema (all fields optional, missing falls back to compiled-in):
+//   { "recruit": { "view_dist": 1200, "fov_deg": 70, "reaction_ms": 700,
+//                  "aim_blend": 0.10, "aim_noise_deg": 4.5,
+//                  "fire_cooldown_ms": 400, "fire_angle_deg": 10 },
+//     "regular": {...}, "veteran": {...}, "elite": {...} }
+//
+// view_dist is plain world units, squared on apply. fov_deg is the FOV cone
+// half-angle in degrees (matches the comments next to the compiled-in tiers);
+// stored as cosine on apply. Both are friendlier to hand-edit than the raw
+// squared / cosine forms.
+try_load_overrides()
+{
+	data = json_load("bot_profiles.json");
+	if (!isDefined(data))
+		return;
+
+	apply_one(1, "recruit", data);
+	apply_one(2, "regular", data);
+	apply_one(3, "veteran", data);
+	apply_one(4, "elite",   data);
+
+	iprintln("^5[bot] ^7profiles: overrides loaded from bot_profiles.json");
+}
+
+apply_one(slot, key, data)
+{
+	if (!isDefined(data[key]))
+		return;
+	src = data[key];
+	p = level.bot_profiles[slot];
+
+	if (isDefined(src["view_dist"]))
+		p.view_dist_sq = src["view_dist"] * src["view_dist"];
+	if (isDefined(src["fov_deg"]))
+		p.fov_cos = cos(src["fov_deg"]);
+	if (isDefined(src["reaction_ms"]))
+		p.reaction_ms = src["reaction_ms"];
+	if (isDefined(src["aim_blend"]))
+		p.aim_blend = src["aim_blend"];
+	if (isDefined(src["aim_noise_deg"]))
+		p.aim_noise_deg = src["aim_noise_deg"];
+	if (isDefined(src["fire_cooldown_ms"]))
+		p.fire_cooldown_ms = src["fire_cooldown_ms"];
+	if (isDefined(src["fire_angle_deg"]))
+		p.fire_angle_deg = src["fire_angle_deg"];
 }
 
 // view_dist_sq: squared world-units, used directly without sqrt
