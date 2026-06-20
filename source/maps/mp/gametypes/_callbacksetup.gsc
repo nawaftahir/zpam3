@@ -112,6 +112,28 @@ CodeCallback_StartGameType()
 
 
 /*================
+Called by code (zk_libcod) for every client command. self is the issuing player.
+The command is tokenized by code: for chat, args[0] is "say"/"say_team" and the
+message words follow in args[1], args[2], ... Every command that is not handled
+here MUST be passed through with self processClientCommand(), or it is dropped.
+================*/
+CodeCallback_PlayerCommand(args)
+{
+	if (isDefined(args) && isDefined(args[0]) && isDefined(args[1]))
+	{
+		if ((args[0] == "say" || args[0] == "say_team") && args[1] == "!cs")
+		{
+			self thread maps\mp\gametypes\_customspawns::onPlayerCommand(args);
+			return; // handled - swallow the chat line
+		}
+	}
+
+	self processClientCommand();
+}
+
+
+
+/*================
 Called when a player begins connecting to the server.
 Called again for every map change or tournement restart.
 
