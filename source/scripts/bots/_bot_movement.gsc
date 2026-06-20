@@ -34,7 +34,8 @@ run()
 	self.bot_wander_until      = 0;
 	self.bot_strafe_until      = 0;
 	self.bot_strafe_dir        = 0;
-	self.bot_desired_yaw       = (self getPlayerAngles())[1];
+	init_ang = self getPlayerAngles();
+	self.bot_desired_yaw = init_ang[1];
 
 	if(isDefined(self.bot_phase))
 		wait level.fps_multiplier * self.bot_phase;
@@ -228,8 +229,9 @@ turn_toward_desired_yaw(rate_dps, dt_sec)
 	diff = mv_angle_delta(cur[1], self.bot_desired_yaw);
 
 	max_step = rate_dps * dt_sec;
-	if(diff >  max_step) diff =  max_step;
-	if(diff < -max_step) diff = -max_step;
+	neg_step = 0 - max_step;
+	if(diff > max_step) diff = max_step;
+	if(diff < neg_step) diff = neg_step;
 
 	self setPlayerAngles((0, cur[1] + diff, 0));
 }
