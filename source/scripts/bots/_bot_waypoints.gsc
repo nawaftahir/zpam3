@@ -76,6 +76,8 @@ add_if_far(origin, min_spacing_sq)
 		build_links(new_idx);
 		level.bot_wp_head = (level.bot_wp_head + 1) % level.bot_wp_max;
 	}
+
+	schedule_save();
 }
 
 // Trace from waypoint pos (raised 32u so we sample at chest height, not floor).
@@ -197,14 +199,42 @@ try_load()
 		iprintln("^5[bot] ^7waypoints: loaded " + loaded + " from " + wp_path());
 }
 
-// Async save fired once at intermission. Builds a struct mirroring the
-// load schema, hands it to json_save_async, and never blocks the script VM.
-// zpam3 fires "intermission" in _end_of_map::Do_Map_End right before
-// players are spawned into the post-game scoreboard.
+// Debounced autosave. Every new waypoint append calls schedule_save(); a
+// single timer thread batches the rapid stream of adds during early sampling
+// into one async write per save_debounce_ms. The intermission save below is
+// a final flush in case the map ends naturally, but the durability guarantee
+// comes from the per-add saves: map_rotate / hard-restart cannot lose data
+// older than save_debounce_ms.
+schedule_save()
+{
+	if (!isDefined(level.bot_wp_save_enabled))
+		level.bot_wp_save_enabled = getCvarInt("scr_bots_waypoints_save");
+	if (!level.bot_wp_save_enabled)
+		return;
+
+	if (isDefined(level.bot_wp_save_pending) && level.bot_wp_save_pending)
+		return;
+	level.bot_wp_save_pending = true;
+	level thread save_debounce();
+}
+
+save_debounce()
+{
+	level endon("intermission");
+	wait level.fps_multiplier * 2.0;     // batch ~2s of rapid sampler appends
+	level.bot_wp_save_pending = false;
+	submit_save();
+}
+
+// Async save fired by debounce + final flush at intermission.
 save_watcher()
 {
 	level waittill("intermission");
+	submit_save();
+}
 
+submit_save()
+{
 	if (!getCvarInt("scr_bots_waypoints_save"))
 		return;
 	if (!isDefined(level.bot_waypoints) || level.bot_waypoints.size == 0)
@@ -223,5 +253,9 @@ save_watcher()
 		iprintln("^1[bot] ^7waypoints: async save submit failed for " + wp_path());
 		return;
 	}
-	iprintln("^5[bot] ^7waypoints: saving " + level.bot_waypoints.size + " to " + wp_path());
+
+	// Only chatter on the final intermission save; the debounced per-tick
+	// saves stay silent to keep the chat readable during play.
+	if (game["state"] == "intermission")
+		iprintln("^5[bot] ^7waypoints: saving " + level.bot_waypoints.size + " to " + wp_path());
 }
