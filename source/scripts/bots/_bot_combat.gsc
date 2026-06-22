@@ -3,18 +3,16 @@
 // Drives view angles toward self.bot_enemy and pulses fire when aim error
 // is within fire_angle_deg.
 //
-// Aim model (human-like, not aimbot lerp):
-//   1. Persistent drift offset that survives multiple ticks. The bot tracks
-//      enemy + this offset, not enemy directly. New drift target is picked
-//      every aim_drift_ms; current offset eases toward it. This makes the
-//      crosshair miss slightly off-centre and visibly readjust.
-//   2. Max angular velocity. Each tick the view can rotate at most
-//      aim_turn_rate_dps * dt degrees. The crosshair physically can't snap
-//      to a moving target; reaction looks like a tracking arc not a jump.
+// Aim model: direct-track + per-shot noise.
+//   1. View rotates toward the true target each tick, capped by
+//      aim_turn_rate_dps. No drift; the crosshair always heads for the enemy.
+//   2. When aim error is inside fire_angle_deg AND cooldown is up, a small
+//      random offset (peak aim_noise_deg) is applied to the view just before
+//      the fire pulse. This produces a realistic per-shot inaccuracy without
+//      making the bot visibly miss the enemy with the crosshair.
 //
-// Per-bot knobs (copied by _bot_brain): aim_blend (now used as drift-easing
-// rate not snap-lerp), aim_noise_deg (peak drift offset in degrees),
-// aim_turn_rate_dps (NEW; max view rotation), fire_cooldown_ms, fire_angle_deg.
+// Per-bot knobs (copied by _bot_brain): aim_turn_rate_dps, aim_noise_deg,
+// fire_cooldown_ms, fire_angle_deg.
 run()
 {
 	self endon("disconnect");
@@ -22,17 +20,10 @@ run()
 	if(isDefined(self.bot_phase))
 		wait level.fps_multiplier * self.bot_phase;
 
-	aim_drift_ms = 350;          // ms between picking a new drift target
-	self.bot_aim_drift_yaw   = 0;
-	self.bot_aim_drift_pitch = 0;
-	self.bot_aim_drift_tgt_yaw   = 0;
-	self.bot_aim_drift_tgt_pitch = 0;
-	self.bot_aim_drift_next  = 0;
-
 	for(;;)
 	{
 		has_enemy = (isDefined(self.bot_enemy) && isAlive(self.bot_enemy));
-		ai_on    = (isDefined(level.bots_ai) && level.bots_ai);
+		ai_on     = (isDefined(level.bots_ai) && level.bots_ai);
 		if(ai_on && isAlive(self) && has_enemy)
 			tick_s = 0.05;
 		else
@@ -49,34 +40,26 @@ run()
 			continue;
 		}
 
-		// Repick drift target periodically. Drift target stays in degrees;
-		// current drift eases toward it each tick.
-		if(gettime() >= self.bot_aim_drift_next && self.bot_aim_noise_deg > 0)
-		{
-			n = self.bot_aim_noise_deg;
-			self.bot_aim_drift_tgt_yaw   = randomfloat(n) - n * 0.5;
-			self.bot_aim_drift_tgt_pitch = randomfloat(n) - n * 0.5;
-			self.bot_aim_drift_next      = gettime() + aim_drift_ms;
-		}
-		// Ease current drift toward target at aim_blend per tick.
-		self.bot_aim_drift_yaw   += (self.bot_aim_drift_tgt_yaw   - self.bot_aim_drift_yaw)   * self.bot_aim_blend;
-		self.bot_aim_drift_pitch += (self.bot_aim_drift_tgt_pitch - self.bot_aim_drift_pitch) * self.bot_aim_blend;
-
-		desired_raw = vectortoangles(enemy getViewOrigin() - self getViewOrigin());
-		desired = (desired_raw[0] + self.bot_aim_drift_pitch, desired_raw[1] + self.bot_aim_drift_yaw, 0);
-
-		current = self getPlayerAngles();
+		desired  = vectortoangles(enemy getViewOrigin() - self getViewOrigin());
+		current  = self getPlayerAngles();
 		next_ang = step_aim(current, desired, self.bot_aim_turn_rate_dps, tick_s);
 		self setPlayerAngles(next_ang);
 
-		yaw_err   = abs_angle(angle_delta(next_ang[1], desired_raw[1]));
-		pitch_err = abs_angle(angle_delta(next_ang[0], desired_raw[0]));
+		yaw_err   = abs_angle(angle_delta(next_ang[1], desired[1]));
+		pitch_err = abs_angle(angle_delta(next_ang[0], desired[0]));
 
 		on_target = (yaw_err < self.bot_fire_angle_deg && pitch_err < self.bot_fire_angle_deg);
 		ready     = (gettime() - self.bot_fire_time >= self.bot_fire_cooldown_ms);
 
 		if(on_target && ready && !teammate_in_line(enemy))
 		{
+			if(self.bot_aim_noise_deg > 0)
+			{
+				n = self.bot_aim_noise_deg;
+				noise_pitch = randomfloat(n) - n * 0.5;
+				noise_yaw   = randomfloat(n) - n * 0.5;
+				self setPlayerAngles((next_ang[0] + noise_pitch, next_ang[1] + noise_yaw, 0));
+			}
 			self thread fire_pulse();
 			self.bot_fire_time = gettime();
 			self scripts\bots\_bot_log::log_event("combat", "fired", "6", enemy.name);

@@ -55,84 +55,44 @@ run()
 			continue;
 		}
 
-		my_eye = self getViewOrigin();
+		my_eye     = self getViewOrigin();
 		my_forward = anglestoforward(self getPlayerAngles());
-
-		// Pull the candidate list from the shared pool rebuilt by _bot_pool.
-		// In team modes use just the opposing pool; in DM use all-alive.
 		team_based = (isDefined(level.gametype) && level.gametype != "dm");
-		if(team_based)
-		{
-			if(self.pers["team"] == "allies")
-				players = level.bot_pool_axis;
-			else
-				players = level.bot_pool_allies;
-		}
-		else
-		{
-			players = level.bot_pool_all;
-		}
-		if(!isDefined(players))
-			players = [];
+		enemy_team = enemy_team_id(team_based);
+
+		// MASK_OPAQUE: solid + glass + slime — what blocks a player from seeing.
+		mask = 524545;
+
+		// One engine call: closest live enemy whose view origin is within
+		// range AND LOS-visible from my eye. Replaces the manual range+FOV+
+		// PVS+sightTrace loop. FOV filter is still applied in GSC because the
+		// native doesn't know our forward vector.
+		candidate = getClosestPlayerByViewOriginInRange(my_eye, self.bot_view_dist_sq, enemy_team, mask);
 
 		best = undefined;
-		best_d2 = self.bot_view_dist_sq;
-
-		for(i = 0; i < players.size; i++)
+		if(isDefined(candidate) && candidate != self && isAlive(candidate))
 		{
-			other = players[i];
-			if(!isDefined(other) || other == self) continue;
-			if(!isAlive(other)) continue;
-
-			dx = other.origin[0] - self.origin[0];
-			dy = other.origin[1] - self.origin[1];
-			dz = other.origin[2] - self.origin[2];
-			d2 = dx*dx + dy*dy + dz*dz;
-			if(d2 > best_d2) continue;
-
-			dir = vectornormalize(other.origin - self.origin);
+			dir = vectornormalize(candidate.origin - self.origin);
 			dot = dir[0]*my_forward[0] + dir[1]*my_forward[1] + dir[2]*my_forward[2];
-			if(dot < self.bot_fov_cos) continue;
-
-			other_eye = other getViewOrigin();
-
-			// PVS prefilter. Counters feed the periodic summary below.
-			self.bot_pvs_calls += 1;
-			if(!getPVS(my_eye, other_eye))
-			{
-				self.bot_pvs_skipped += 1;
-				continue;
-			}
-
-			self.bot_pvs_traces += 1;
-			if(!sightTracePassed(my_eye, other_eye, false, self))
-			{
-				self.bot_pvs_trace_miss += 1;
-				continue;
-			}
-			self.bot_pvs_trace_hit += 1;
-
-			best = other;
-			best_d2 = d2;
+			if(dot >= self.bot_fov_cos)
+				best = candidate;
 		}
+
+		// Track PVS stats by counting how often the native's result is the
+		// same target as the previous tick (cheap proxy for "trace work
+		// saved by sticky perception").
+		self.bot_pvs_calls += 1;
+		if(isDefined(best) && isDefined(self.bot_enemy) && best == self.bot_enemy)
+			self.bot_pvs_skipped += 1;
+		else if(isDefined(best))
+			self.bot_pvs_trace_hit += 1;
+		else
+			self.bot_pvs_trace_miss += 1;
 
 		log_pvs_summary();
 
 		threat_count = count_visible_threats(my_eye, team_based);
 		self.bot_visible_threats = threat_count;
-
-		// Cross-check via consolidated native every 8th tick (~1s active /
-		// ~3s idle). Logs when the engine-side fast path picks a different
-		// target than the per-candidate loop. Working-correctness probe; no
-		// behaviour change to self.bot_enemy.
-		if(!isDefined(self.bot_perc_xcheck))
-			self.bot_perc_xcheck = 0;
-		self.bot_perc_xcheck += 1;
-		if(self.bot_perc_xcheck >= 8)
-		{
-			self.bot_perc_xcheck = 0;
-			cross_check_view_native(my_eye, team_based, best);
-		}
 
 		// Reaction gate: only fires when going from "no current enemy" to
 		// "first sighting". Free target switching once already committed.
