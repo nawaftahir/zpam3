@@ -73,6 +73,8 @@ apply_one(slot, key, data)
 		p.aim_blend = src["aim_blend"];
 	if (isDefined(src["aim_noise_deg"]))
 		p.aim_noise_deg = src["aim_noise_deg"];
+	if (isDefined(src["aim_turn_rate_dps"]))
+		p.aim_turn_rate_dps = src["aim_turn_rate_dps"];
 	if (isDefined(src["fire_cooldown_ms"]))
 		p.fire_cooldown_ms = src["fire_cooldown_ms"];
 	if (isDefined(src["fire_angle_deg"]))
@@ -113,13 +115,14 @@ apply_one(slot, key, data)
 recruit()
 {
 	p = spawnstruct();
-	p.view_dist_sq    = 1200 * 1200;
-	p.fov_cos         = 0.34;   // ~70 deg cone
-	p.reaction_ms     = 700;
-	p.aim_blend       = 0.10;
-	p.aim_noise_deg   = 4.5;
-	p.fire_cooldown_ms = 400;
-	p.fire_angle_deg  = 10;
+	p.view_dist_sq    = 1500 * 1500;
+	p.fov_cos         = 0.34;          // ~70 deg cone
+	p.reaction_ms     = 600;
+	p.aim_blend       = 0.18;          // drift easing rate per 50ms tick
+	p.aim_noise_deg   = 3.5;           // peak drift offset in degrees
+	p.aim_turn_rate_dps = 130;         // max view rotation deg/sec
+	p.fire_cooldown_ms = 350;
+	p.fire_angle_deg  = 9;
 	p.peek_chance_per_sec = 0.0;
 	p.peek_lean_enabled   = 0;
 	p.peek_jump_enabled   = 0;
@@ -132,13 +135,14 @@ recruit()
 regular()
 {
 	p = spawnstruct();
-	p.view_dist_sq    = 1800 * 1800;
-	p.fov_cos         = 0.17;   // ~80 deg cone
-	p.reaction_ms     = 400;
-	p.aim_blend       = 0.20;
-	p.aim_noise_deg   = 2.5;
-	p.fire_cooldown_ms = 300;
-	p.fire_angle_deg  = 8;
+	p.view_dist_sq    = 2000 * 2000;
+	p.fov_cos         = 0.17;          // ~80 deg cone
+	p.reaction_ms     = 320;
+	p.aim_blend       = 0.22;
+	p.aim_noise_deg   = 2.2;
+	p.aim_turn_rate_dps = 180;
+	p.fire_cooldown_ms = 280;
+	p.fire_angle_deg  = 7;
 	p.peek_chance_per_sec = 0.05;
 	p.peek_lean_enabled   = 1;
 	p.peek_jump_enabled   = 0;
@@ -152,12 +156,13 @@ veteran()
 {
 	p = spawnstruct();
 	p.view_dist_sq    = 2200 * 2200;
-	p.fov_cos         = -0.17;  // ~100 deg cone
-	p.reaction_ms     = 200;
-	p.aim_blend       = 0.40;
-	p.aim_noise_deg   = 1.0;
-	p.fire_cooldown_ms = 220;
-	p.fire_angle_deg  = 6;
+	p.fov_cos         = -0.17;         // ~100 deg cone
+	p.reaction_ms     = 220;
+	p.aim_blend       = 0.28;
+	p.aim_noise_deg   = 1.3;
+	p.aim_turn_rate_dps = 240;
+	p.fire_cooldown_ms = 240;
+	p.fire_angle_deg  = 5;
 	p.peek_chance_per_sec = 0.15;
 	p.peek_lean_enabled   = 1;
 	p.peek_jump_enabled   = 1;
@@ -171,11 +176,12 @@ elite()
 {
 	p = spawnstruct();
 	p.view_dist_sq    = 2600 * 2600;
-	p.fov_cos         = -0.64;  // ~130 deg cone (near full half-sphere)
-	p.reaction_ms     = 100;
-	p.aim_blend       = 0.60;
-	p.aim_noise_deg   = 0.4;
-	p.fire_cooldown_ms = 180;
+	p.fov_cos         = -0.64;         // ~130 deg cone
+	p.reaction_ms     = 140;
+	p.aim_blend       = 0.35;
+	p.aim_noise_deg   = 0.7;
+	p.aim_turn_rate_dps = 320;
+	p.fire_cooldown_ms = 200;
 	p.fire_angle_deg  = 4;
 	p.peek_chance_per_sec = 0.30;
 	p.peek_lean_enabled   = 1;

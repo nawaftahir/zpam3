@@ -1,14 +1,10 @@
 #include maps\mp\gametypes\global\_global;
 
 // Picks closest visible enemy each tick. Filter chain (cheap to expensive):
-//   range^2  ->  FOV cone (dot product)  ->  LOS trace
+//   range^2 -> FOV cosine -> getPVS -> sightTracePassed
 //
-// Per-bot knobs are copied onto self by _bot_brain at init:
-//   self.bot_view_dist_sq, self.bot_fov_cos, self.bot_reaction_ms
-//
-// Reaction window: when going from "no enemy" to "enemy visible", commit is
-// delayed by reaction_ms. While committed to a target, switching to a closer
-// visible enemy is instant (no second reaction).
+// Reaction gate: first sighting commits after reaction_ms; switches between
+// visible targets are instant.
 run()
 {
 	self endon("disconnect");
@@ -18,6 +14,22 @@ run()
 		wait level.fps_multiplier * self.bot_phase;
 
 	self.bot_last_seen_ms = 0;
+
+	self.bot_pvs_calls       = 0;
+	self.bot_pvs_skipped     = 0;
+	self.bot_pvs_traces      = 0;
+	self.bot_pvs_trace_hit   = 0;
+	self.bot_pvs_trace_miss  = 0;
+	self.bot_pvs_log_next    = gettime() + 10000;
+
+	self.bot_threats_samples = 0;
+	self.bot_threats_sum     = 0;
+	self.bot_threats_peak    = 0;
+	self.bot_threats_log_next = gettime() + 10000;
+
+	self.bot_xcheck_total  = 0;
+	self.bot_xcheck_agree  = 0;
+	self.bot_xcheck_log_next = gettime() + 10000;
 
 	for(;;)
 	{
@@ -83,10 +95,43 @@ run()
 			if(dot < self.bot_fov_cos) continue;
 
 			other_eye = other getViewOrigin();
-			if(!sightTracePassed(my_eye, other_eye, false, self)) continue;
+
+			// PVS prefilter. Counters feed the periodic summary below.
+			self.bot_pvs_calls += 1;
+			if(!getPVS(my_eye, other_eye))
+			{
+				self.bot_pvs_skipped += 1;
+				continue;
+			}
+
+			self.bot_pvs_traces += 1;
+			if(!sightTracePassed(my_eye, other_eye, false, self))
+			{
+				self.bot_pvs_trace_miss += 1;
+				continue;
+			}
+			self.bot_pvs_trace_hit += 1;
 
 			best = other;
 			best_d2 = d2;
+		}
+
+		log_pvs_summary();
+
+		threat_count = count_visible_threats(my_eye, team_based);
+		self.bot_visible_threats = threat_count;
+
+		// Cross-check via consolidated native every 8th tick (~1s active /
+		// ~3s idle). Logs when the engine-side fast path picks a different
+		// target than the per-candidate loop. Working-correctness probe; no
+		// behaviour change to self.bot_enemy.
+		if(!isDefined(self.bot_perc_xcheck))
+			self.bot_perc_xcheck = 0;
+		self.bot_perc_xcheck += 1;
+		if(self.bot_perc_xcheck >= 8)
+		{
+			self.bot_perc_xcheck = 0;
+			cross_check_view_native(my_eye, team_based, best);
 		}
 
 		// Reaction gate: only fires when going from "no current enemy" to
@@ -127,4 +172,116 @@ run()
 			self.bot_last_enemy_pos = committed.origin;
 		}
 	}
+}
+
+// Single-call sanity probe via getClosestPlayerByViewOriginInRange with the
+// built-in LOS trace. Counters feed the periodic xcheck summary.
+cross_check_view_native(my_eye, team_based, loop_best)
+{
+	enemy_team = enemy_team_id(team_based);
+	mask       = 524545;   // MASK_OPAQUE = solid + glass + slime
+	native_best = getClosestPlayerByViewOriginInRange(my_eye, self.bot_view_dist_sq, enemy_team, mask);
+
+	self.bot_xcheck_total += 1;
+
+	agree = false;
+	if(!isDefined(native_best) && !isDefined(loop_best))
+		agree = true;
+	else if(isDefined(native_best) && isDefined(loop_best) && native_best == loop_best)
+		agree = true;
+
+	if(agree)
+		self.bot_xcheck_agree += 1;
+}
+
+// Count alive opposing-team players visible from my_eye via the consolidated
+// native with built-in LOS trace. Updates running min/max/avg for the
+// periodic threats summary.
+count_visible_threats(my_eye, team_based)
+{
+	enemy_team = enemy_team_id(team_based);
+	mask       = 524545;
+	threats    = getPlayersByViewOriginInRange(my_eye, self.bot_view_dist_sq, enemy_team, mask);
+
+	n = threats.size;
+	self.bot_threats_samples += 1;
+	self.bot_threats_sum     += n;
+	if(n > self.bot_threats_peak)
+		self.bot_threats_peak = n;
+
+	log_threats_summary();
+	log_xcheck_summary();
+
+	return n;
+}
+
+enemy_team_id(team_based)
+{
+	if(!team_based || !isDefined(self.pers["team"]))
+		return -1;
+	if(self.pers["team"] == "allies")
+		return 1;
+	return 2;
+}
+
+log_pvs_summary()
+{
+	if(!isDefined(level.debug_bot_flags) || !isDefined(level.debug_bot_flags["pvs"]) || !level.debug_bot_flags["pvs"])
+		return;
+	if(gettime() < self.bot_pvs_log_next)
+		return;
+
+	total = self.bot_pvs_calls;
+	if(total > 0)
+	{
+		skip_pct = (self.bot_pvs_skipped * 100) / total;
+		tag = "calls=" + total + " skip=" + self.bot_pvs_skipped + "(" + skip_pct + "%) traces=" + self.bot_pvs_traces + " hit=" + self.bot_pvs_trace_hit + " miss=" + self.bot_pvs_trace_miss;
+		self scripts\bots\_bot_log::log_event("pvs", "pvs", "5", tag);
+	}
+
+	self.bot_pvs_calls      = 0;
+	self.bot_pvs_skipped    = 0;
+	self.bot_pvs_traces     = 0;
+	self.bot_pvs_trace_hit  = 0;
+	self.bot_pvs_trace_miss = 0;
+	self.bot_pvs_log_next   = gettime() + 10000;
+}
+
+log_threats_summary()
+{
+	if(!isDefined(level.debug_bot_flags) || !isDefined(level.debug_bot_flags["threats"]) || !level.debug_bot_flags["threats"])
+		return;
+	if(gettime() < self.bot_threats_log_next)
+		return;
+
+	if(self.bot_threats_samples > 0)
+	{
+		avg10 = int((self.bot_threats_sum * 10) / self.bot_threats_samples);
+		tag   = "samples=" + self.bot_threats_samples + " peak=" + self.bot_threats_peak + " avg=" + int(avg10 / 10) + "." + int(avg10 % 10);
+		self scripts\bots\_bot_log::log_event("threats", "threats", "3", tag);
+	}
+
+	self.bot_threats_samples = 0;
+	self.bot_threats_sum     = 0;
+	self.bot_threats_peak    = 0;
+	self.bot_threats_log_next = gettime() + 10000;
+}
+
+log_xcheck_summary()
+{
+	if(!isDefined(level.debug_bot_flags) || !isDefined(level.debug_bot_flags["xcheck"]) || !level.debug_bot_flags["xcheck"])
+		return;
+	if(gettime() < self.bot_xcheck_log_next)
+		return;
+
+	if(self.bot_xcheck_total > 0)
+	{
+		pct = (self.bot_xcheck_agree * 100) / self.bot_xcheck_total;
+		tag = "agree=" + self.bot_xcheck_agree + "/" + self.bot_xcheck_total + " (" + pct + "%)";
+		self scripts\bots\_bot_log::log_event("xcheck", "xcheck", "2", tag);
+	}
+
+	self.bot_xcheck_total = 0;
+	self.bot_xcheck_agree = 0;
+	self.bot_xcheck_log_next = gettime() + 10000;
 }

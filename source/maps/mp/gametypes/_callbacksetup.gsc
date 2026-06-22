@@ -126,6 +126,12 @@ CodeCallback_PlayerCommand(args)
 			self thread maps\mp\gametypes\_customspawns::onPlayerCommand(args);
 			return; // handled - swallow the chat line
 		}
+
+		if ((args[0] == "say" || args[0] == "say_team") && args[1] == "!hp")
+		{
+			self thread scripts\bots\_bot_helpers_test::onPlayerCommand(args);
+			return; // handled - swallow the chat line
+		}
 	}
 
 	self processClientCommand();

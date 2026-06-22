@@ -21,6 +21,7 @@ run()
 	self.bot_reaction_ms     = prof.reaction_ms;
 	self.bot_aim_blend       = prof.aim_blend;
 	self.bot_aim_noise_deg   = prof.aim_noise_deg;
+	self.bot_aim_turn_rate_dps = prof.aim_turn_rate_dps;
 	self.bot_fire_cooldown_ms = prof.fire_cooldown_ms;
 	self.bot_fire_angle_deg  = prof.fire_angle_deg;
 
@@ -72,4 +73,18 @@ run()
 	self thread scripts\bots\_bot_movement::run();
 	self thread scripts\bots\_bot_peek::run();
 	self thread scripts\bots\_bot_traverse::run();
+	self thread respawn_input_reset();
+}
+
+// Wipe persistent bot input state on every respawn so a stance/lean/fire
+// held at the moment of death does not bleed into the next life.
+respawn_input_reset()
+{
+	self endon("disconnect");
+
+	for(;;)
+	{
+		self waittill("spawned_player");
+		self clearBotInputs();
+	}
 }

@@ -153,7 +153,7 @@ resolve_path_target(goal)
 		return undefined;
 
 	advance_eps_sq = 128 * 128;
-	replan_ms      = 1000;
+	replan_ms      = 2500;          // goals are sticky now; replan less often
 	goal_drift_sq  = 150 * 150;
 
 	stale = false;
@@ -186,43 +186,73 @@ resolve_path_target(goal)
 	return self.bot_path[self.bot_path_idx];
 }
 
-// Decide where to walk while idle.
-//   1. recent lost enemy (< 6s)        -> last-known origin (chase)
-//   2. else 50% chance + waypoint pool -> random waypoint
-//   3. else                            -> undefined (pick random yaw)
+// Sticky idle goal. Once a goal is picked it lives on self.bot_goal until
+//   - reached (within goal_reach_sq), or
+//   - timed out (no progress / too long held), or
+//   - a fresh chase target arrives (last_enemy_pos newer than current goal).
+// This stops the per-tick replan thrash that came from re-rolling the goal
+// every call.
 pick_idle_goal()
 {
 	chase_window_ms = 6000;
 	goal_reach_sq   = 64 * 64;
+	goal_max_age_ms = 25000;       // give up on any goal after 25s
 
+	now = gettime();
+
+	// Chase has priority. Switch to it if the last enemy sighting is newer
+	// than our current goal pick AND still inside the chase window.
 	if(isDefined(self.bot_last_enemy_pos) && isDefined(self.bot_last_seen_ms))
 	{
-		if(gettime() - self.bot_last_seen_ms < chase_window_ms)
+		if(now - self.bot_last_seen_ms < chase_window_ms)
 		{
 			if(distanceSquared(self.origin, self.bot_last_enemy_pos) > goal_reach_sq)
-				return self.bot_last_enemy_pos;
-			self.bot_last_enemy_pos = undefined;
+			{
+				cur_set = 0;
+				if(isDefined(self.bot_goal_set_ms))
+					cur_set = self.bot_goal_set_ms;
+				if(self.bot_last_seen_ms > cur_set)
+				{
+					self.bot_goal        = self.bot_last_enemy_pos;
+					self.bot_goal_set_ms = now;
+					self.bot_goal_kind   = "chase";
+				}
+			}
+			else
+			{
+				self.bot_last_enemy_pos = undefined;
+			}
 		}
 	}
 
-	if(randomint(100) < 50)
+	// Existing goal still valid?
+	if(isDefined(self.bot_goal))
 	{
-		wp = scripts\bots\_bot_waypoints::pick_for_bot(self getEntityNumber());
-		if(isDefined(wp))
-		{
-			if(distanceSquared(self.origin, wp) > goal_reach_sq)
-				return wp;
-		}
+		reached = (distanceSquared(self.origin, self.bot_goal) <= goal_reach_sq);
+		aged    = (now - self.bot_goal_set_ms >= goal_max_age_ms);
+		if(!reached && !aged)
+			return self.bot_goal;
+		self.bot_goal        = undefined;
+		self.bot_goal_kind   = undefined;
 	}
 
-	// Fallback when no waypoints exist yet (fresh map, sampler still seeding).
-	// Bias toward an enemy team spawn point so bots actually push instead of
-	// wandering aimlessly into a wall while looking "real slow."
+	// Pick fresh goal: prefer waypoint pool, fall back to spawn points.
+	wp = scripts\bots\_bot_waypoints::pick_for_bot(self getEntityNumber());
+	if(isDefined(wp) && distanceSquared(self.origin, wp) > goal_reach_sq)
+	{
+		self.bot_goal        = wp;
+		self.bot_goal_set_ms = now;
+		self.bot_goal_kind   = "wp";
+		return wp;
+	}
+
 	sp = pick_enemy_spawn();
-	if(isDefined(sp))
+	if(isDefined(sp) && distanceSquared(self.origin, sp) > goal_reach_sq)
 	{
-		if(distanceSquared(self.origin, sp) > goal_reach_sq)
-			return sp;
+		self.bot_goal        = sp;
+		self.bot_goal_set_ms = now;
+		self.bot_goal_kind   = "spawn";
+		return sp;
 	}
 
 	return undefined;

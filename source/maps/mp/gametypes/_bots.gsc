@@ -32,6 +32,11 @@ Init()
 	registerCvarEx("I", "debug_bot_peek", "BOOL", 0);		// lean / jump-shot / prone
 	registerCvarEx("I", "debug_bot_spawn", "BOOL", 0);		// bot spawn / lifecycle
 	registerCvarEx("I", "debug_bot_waypoints", "BOOL", 0);	// waypoint load / save
+	registerCvarEx("I", "debug_bot_pvs", "BOOL", 0);		// perception getPVS skips
+	registerCvarEx("I", "debug_bot_pool", "BOOL", 0);		// _bot_pool getPlayersInRange summary
+	registerCvarEx("I", "debug_bot_threats", "BOOL", 0);	// getPlayersByViewOriginInRange threat counter
+	registerCvarEx("I", "debug_bot_xcheck", "BOOL", 0);		// getClosestPlayerByViewOriginInRange cross-check
+	registerCvarEx("I", "debug_bot_ff", "BOOL", 0);			// getClosestPlayerInRange friendly-fire holds
 
 	// Pull current cvar values so debug flags survive map changes. Setting
 	// level.debug_bot_flags = [] right after registerCvarEx wipes whatever
@@ -46,6 +51,11 @@ Init()
 	level.debug_bot_flags["peek"]       = getCvarInt("debug_bot_peek");
 	level.debug_bot_flags["spawn"]      = getCvarInt("debug_bot_spawn");
 	level.debug_bot_flags["waypoints"]  = getCvarInt("debug_bot_waypoints");
+	level.debug_bot_flags["pvs"]        = getCvarInt("debug_bot_pvs");
+	level.debug_bot_flags["pool"]       = getCvarInt("debug_bot_pool");
+	level.debug_bot_flags["threats"]    = getCvarInt("debug_bot_threats");
+	level.debug_bot_flags["xcheck"]     = getCvarInt("debug_bot_xcheck");
+	level.debug_bot_flags["ff"]         = getCvarInt("debug_bot_ff");
 	level.debug_bots                    = getCvarInt("debug_bots");
 	level.bots_freeze                   = getCvarInt("scr_bots_freeze");
 	level.bots_ai                       = getCvarInt("scr_bots_ai");
@@ -126,6 +136,11 @@ onCvarChanged(cvar, value, isRegisterTime)
 		case "debug_bot_peek":			level.debug_bot_flags["peek"]       = value;	return true;
 		case "debug_bot_spawn":			level.debug_bot_flags["spawn"]      = value;	return true;
 		case "debug_bot_waypoints":		level.debug_bot_flags["waypoints"]  = value;	return true;
+		case "debug_bot_pvs":			level.debug_bot_flags["pvs"]        = value;	return true;
+		case "debug_bot_pool":			level.debug_bot_flags["pool"]       = value;	return true;
+		case "debug_bot_threats":		level.debug_bot_flags["threats"]    = value;	return true;
+		case "debug_bot_xcheck":		level.debug_bot_flags["xcheck"]     = value;	return true;
+		case "debug_bot_ff":			level.debug_bot_flags["ff"]         = value;	return true;
 
 	}
 	return false;

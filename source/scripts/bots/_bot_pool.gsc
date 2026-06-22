@@ -1,12 +1,7 @@
 #include maps\mp\gametypes\global\_global;
 
-// Single level-owned player pool. Every bot perception tick used to call
-// getentarray + iterate all players + filter by team/alive. With 16 bots at
-// 10Hz that's ~3000 player-iterations/sec just to *build* the candidate list.
-//
-// This rebuilds the same filtered list once per pool_rebuild_ms and stashes
-// the result on level. Perception reads the cached array — O(1) build cost
-// per bot per tick.
+// Level-cached player pool, rebuilt at 5Hz. Filtering happens engine-side
+// via the getPlayersInRange native (team enum: 1=axis, 2=allies, -1=any).
 
 init()
 {
@@ -19,30 +14,30 @@ init()
 run()
 {
 	level endon("intermission");
+
 	pool_rebuild_ms = 200;
+	big_d2          = 100000.0 * 100000.0;
+	world_origin    = (0, 0, 0);
 
 	for(;;)
 	{
 		wait level.fps_multiplier * (pool_rebuild_ms / 1000.0);
 
-		allies = [];
-		axis   = [];
-		all    = [];
+		level.bot_pool_axis   = getPlayersInRange(world_origin, big_d2, 1);
+		level.bot_pool_allies = getPlayersInRange(world_origin, big_d2, 2);
+		level.bot_pool_all    = getPlayersInRange(world_origin, big_d2, -1);
 
-		players = getentarray("player", "classname");
-		for(i = 0; i < players.size; i++)
-		{
-			p = players[i];
-			if(!isAlive(p)) continue;
-			if(!isDefined(p.pers["team"])) continue;
-
-			all[all.size] = p;
-			if(p.pers["team"] == "allies")    allies[allies.size] = p;
-			else if(p.pers["team"] == "axis") axis[axis.size] = p;
-		}
-
-		level.bot_pool_allies = allies;
-		level.bot_pool_axis   = axis;
-		level.bot_pool_all    = all;
+		log_pool_summary();
 	}
+}
+
+log_pool_summary()
+{
+	if(!isDefined(level.debug_bot_flags) || !isDefined(level.debug_bot_flags["pool"]) || !level.debug_bot_flags["pool"])
+		return;
+	if(isDefined(level.bot_pool_log_next) && gettime() < level.bot_pool_log_next)
+		return;
+
+	level.bot_pool_log_next = gettime() + 5000;
+	iprintln("^8[bot] ^7pool: axis=" + level.bot_pool_axis.size + " allies=" + level.bot_pool_allies.size + " all=" + level.bot_pool_all.size);
 }
