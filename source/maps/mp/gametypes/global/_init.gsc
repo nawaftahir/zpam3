@@ -111,6 +111,8 @@ InitModules()
 	thread maps\mp\gametypes\_score_set::init(); // depends on readyup, halftime, sd
 	thread maps\mp\gametypes\_sniper_shotgun_info::init();
 	thread maps\mp\gametypes\_warnings::init();
+	thread maps\mp\gametypes\_cod2x::init();
+	thread maps\mp\gametypes\_http_test::init();
 	thread maps\mp\gametypes\_aim_trainer::init();		// depends on readyup
 	thread maps\mp\gametypes\_file::init(); // depends on _streamer_auto
 

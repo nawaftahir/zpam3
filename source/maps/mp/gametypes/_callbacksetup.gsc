@@ -919,3 +919,31 @@ AbortLevel()
 callbackVoid()
 {
 }
+
+/*================
+Called for every client command (chat included). We intercept the !hwid and
+!gethwid chat commands and route them to the CoD2x identity module; everything
+else is passed through to the engine with processClientCommand().
+================*/
+CodeCallback_PlayerCommand(args)
+{
+	if (isDefined(args) && isDefined(args[0]) && isDefined(args[1]))
+	{
+		if (args[0] == "say" || args[0] == "say_team")
+		{
+			cmd = tolower(args[1]);
+			if (cmd == "!hwid" || cmd == "!gethwid")
+			{
+				self thread maps\mp\gametypes\_cod2x::onPlayerCommand(args);
+				return; // handled - swallow the chat line
+			}
+			if (cmd == "!geoip")
+			{
+				self thread maps\mp\gametypes\_http_test::onGeoCommand(args);
+				return; // handled - swallow the chat line
+			}
+		}
+	}
+
+	self processClientCommand();
+}
